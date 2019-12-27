@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"syscall"
 	"time"
 
 	proxyprotocol "github.com/c0va23/go-proxyprotocol"
@@ -352,8 +353,18 @@ func buildProxyProtocolListener(ctx context.Context, entryPoint *static.EntryPoi
 		WithLogger(proxyProtocolLogger{Logger: log.FromContext(ctx)}), nil
 }
 
+type netControl func(network, address string, c syscall.RawConn) error
+
+var osNetControl netControl
+
 func buildListener(ctx context.Context, entryPoint *static.EntryPoint) (net.Listener, error) {
-	listener, err := net.Listen("tcp", entryPoint.Address)
+	listenConfig := &net.ListenConfig{}
+	if osNetControl != nil && entryPoint.Reuse {
+		log.FromContext(ctx).Infof("Enabling entrypoint address reuse on %s", entryPoint.Address)
+		listenConfig.Control = osNetControl
+	}
+
+	listener, err := listenConfig.Listen(context.Background(), "tcp", entryPoint.Address)
 
 	if err != nil {
 		return nil, fmt.Errorf("error opening listener: %v", err)
