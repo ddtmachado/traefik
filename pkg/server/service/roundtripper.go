@@ -30,6 +30,15 @@ func (t *h2cTransportWrapper) RoundTrip(req *http.Request) (*http.Response, erro
 	return t.Transport.RoundTrip(req)
 }
 
+type httpUnixTransportWrapper struct {
+	*http.Transport
+}
+
+func (t *httpUnixTransportWrapper) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.URL.Scheme = "http"
+	return t.Transport.RoundTrip(req)
+}
+
 // SpiffeX509Source allows to retrieve a x509 SVID and bundle.
 type SpiffeX509Source interface {
 	x509svid.Source
@@ -176,6 +185,23 @@ func (r *RoundTripperManager) createRoundTripper(cfg *dynamic.ServersTransport) 
 			}
 		}
 	}
+
+	transportHTTP1Unix := &httpUnixTransportWrapper{
+		Transport: &http.Transport{
+			Dial: func(network, addr string) (net.Conn, error) {
+				//Ignore the port
+				host, _, err := net.SplitHostPort(addr)
+				if err != nil {
+					return nil, err
+				}
+				return net.Dial("unix", host)
+			},
+			DialTLS: func(network, addr string) (net.Conn, error) {
+				return nil, errors.New("TLS not supported with http+unix protocol")
+			},
+		},
+	}
+	transport.RegisterProtocol("http+unix", transportHTTP1Unix)
 
 	// Return directly HTTP/1.1 transport when HTTP/2 is disabled
 	if cfg.DisableHTTP2 {

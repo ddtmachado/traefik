@@ -293,6 +293,10 @@ func (m *Manager) getLoadBalancerServiceHandler(ctx context.Context, serviceName
 		if err != nil {
 			return nil, fmt.Errorf("error parsing server URL %s: %w", server.URL, err)
 		}
+		if target.Scheme == "http+unix" {
+			host := strings.Split(server.URL, ":")[1]
+			target.Host = host
+		}
 
 		logger.Debug().Str(logs.ServerName, proxyName).Stringer("target", target).
 			Msg("Creating server")
